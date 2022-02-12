@@ -42,6 +42,15 @@ async def process_start_command(message: types.Message, state: FSMContext):
     await state.finish()
 
 
+@dp.message_handler(text='Выйти')
+async def get_text_messages(message: types.Message):
+    if message.from_user.id in admin:
+        admin.remove(message.from_user.id)
+        await message.answer('Выход', reply_markup=kb.markup_main)
+    else:
+        await message.answer('Отказано в доступе')
+
+
 @dp.message_handler(text=['Объявления'])
 async def process_start_command(message: types.Message):
     if message.from_user.id in admin:
@@ -101,17 +110,16 @@ async def process_callback_button1(callback_query: types.CallbackQuery):
                             Подтверждение: {i[9]}\n'''
             await callback_query.message.answer(text)
         await callback_query.message.answer('Введите ID объявления, которое хотели бы изменить')
-        await ChangePoster.ID.set()
+        await ChangePoster.IdData.set()
     except IndexError:
         await callback_query.message.answer('Нет доступных объявлений.')
 
 
-@dp.callback_query_handler(state=ChangePoster.ID)
-async def process_callback_button1(callback_query: types.CallbackQuery, state: FSMContext):
+@dp.message_handler(state=ChangePoster.IdData)
+async def process_start_command(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
-        data['ID'] = callback_query.data
-    await ChangePoster.ChangeData.set()
-    poster = db.one_announcement(callback_query.data)
+        data['IdData'] = message.text
+    poster = db.one_announcement(message.text)
     text = f'''\n
                         №1 ID: {poster[0]}\n
                         №2 Город: {poster[1]}\n
@@ -123,39 +131,38 @@ async def process_callback_button1(callback_query: types.CallbackQuery, state: F
                         №8 Стоимость: {poster[7]}\n
                         №9 Телефон: {poster[8]} \n
                         №10 Подтверждение: {poster[9]}\n'''
-    await callback_query.message.answer(text)
-    await callback_query.message.answer('Укажите номер поля которое вы хотели бы изменить'
+    await message.answer(text)
+    await message.answer('Укажите номер поля которое вы хотели бы изменить'
                                         ' и желаемое значение через пробел.')
+    await ChangePoster.ChangeData.set()
 
 
-@dp.callback_query_handler(state=ChangePoster.ChangeData)
-async def process_callback_button1(callback_query: types.CallbackQuery, state: FSMContext):
+@dp.message_handler(state=ChangePoster.ChangeData)
+async def process_start_command(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
-        data['ChangeData'] = callback_query.data
+        data['ChangeData'] = message.text
     data = await state.get_data()
-    if list(data.values())[0] == '1':
+    if list(data.values())[1][0] == '1':
         db.update_announcement(list(data.values())[0], 'id', list(data.values())[1][2:])
-    if list(data.values())[0] == '2':
+    if list(data.values())[1][0] == '2':
         db.update_announcement(list(data.values())[0], 'town', list(data.values())[1][2:])
-    if list(data.values())[0] == '3':
+    if list(data.values())[1][0] == '3':
         db.update_announcement(list(data.values())[0], 'type', list(data.values())[1][2:])
-    if list(data.values())[0] == '4':
+    if list(data.values())[1][0] == '4':
         db.update_announcement(list(data.values())[0], 'title', list(data.values())[1][2:])
-    if list(data.values())[0] == '5':
+    if list(data.values())[1][0] == '5':
         db.update_announcement(list(data.values())[0], 'description', list(data.values())[1][2:])
-    if list(data.values())[0] == '6':
+    if list(data.values())[1][0] == '6':
         db.update_announcement(list(data.values())[0], 'place', list(data.values())[1][2:])
-    if list(data.values())[0] == '7':
+    if list(data.values())[1][0] == '7':
         db.update_announcement(list(data.values())[0], 'date_time', list(data.values())[1][2:])
-    if list(data.values())[0] == '8':
+    if list(data.values())[1][0] == '8':
         db.update_announcement(list(data.values())[0], 'cost', list(data.values())[1][2:])
-    if list(data.values())[2] == '9':
+    if list(data.values())[1][0] == '9':
         db.update_announcement(list(data.values())[0], 'telephone', list(data.values())[1][2:])
-    if list(data.values())[2] == '10':
+    if list(data.values())[1][0] == '10':
         db.update_announcement(list(data.values())[0], 'approved', list(data.values())[1][2:])
-    else:
-        await callback_query.message.answer('Неверное значение')
-
+    await state.finish()
 
 
 @dp.callback_query_handler(lambda c: c.data == 'approve_ann')
@@ -255,14 +262,7 @@ async def process_start_command(message: types.Message, state: FSMContext):
         data['Approved'] = 'Disapproved'
     await message.answer("Спасибо, объявление сохранено.")
     data = await state.get_data()
-    if db.check_users_announcement():
-        all_user_announcement = db.all_announcements()
-        id = all_user_announcement[0][0]
-        data_list = list(data.values())
-        data_list.append(id)
-        db.change_user_announcement(data_list)
-    else:
-        db.add_to_db_announcement(list(data.values()))
+    db.add_to_db_announcement(list(data.values()))
     await state.finish()
 
 
@@ -289,5 +289,18 @@ async def process_callback_button1(callback_query: types.CallbackQuery, state: F
     if not db.approved_user_announcement(list(data.values())[0]):
         await callback_query.message.answer('В данном городе нет объявлений')
     else:
-        await callback_query.message.answer(db.approved_user_announcement(list(data.values())[0]))
+        poster = db.approved_user_announcement(list(data.values())[0])
+        for i in poster:
+            text = f'''\n
+                        ID: {i[0]}\n
+                        Город: {i[1]}\n
+                        Тип мероприятия: {i[2]}\n
+                        Название: {i[3]}
+                        Описание: {i[4]}\n
+                        Место проведения: {i[5]}\n
+                        Дата и время: {i[6]}\n
+                        Стоимость: {i[7]}\n
+                        Телефон: {i[8]} \n
+                        Подтверждение: {i[9]}\n'''
+            await callback_query.message.answer(text)
     await state.finish()

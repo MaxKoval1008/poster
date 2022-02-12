@@ -53,5 +53,5 @@ class UsersBase:
         return self.cur.fetchall()
 
     def update_announcement(self, id, id_data, data):
-        self.cur.execute(f'''UPDATE {id_data} FROM poster SET {id_data}={data} WHERE id=?''', (id,))
+        self.cur.execute(f'''UPDATE poster SET {id_data}={data} WHERE id=?''', (id,))
         self.conn.commit()

@@ -22,5 +22,5 @@ class ShowPoster(StatesGroup):
 
 
 class ChangePoster(StatesGroup):
-    ID = State()
+    IdData = State()
     ChangeData = State()
